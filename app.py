@@ -1,33 +1,48 @@
-import streamlit as st
-import numpy as np
-import pandas as pd
+from flask import Flask,render_template,request
 import pickle
+import numpy as np
 
-st.set_page_config(layout="wide")
-st.title("Books Recommender System")
-st.markdown("""
-<style>
-.big-font {
-    font-size:30px !important;
-}
-.color-div{
-    background-color:white;
-}
-</style>
-""", unsafe_allow_html=True)
+#popular_path='C:\Users\admin\Desktop\Python Projects\Book-recommendation\model\popular.pkl'
+popular_df = pickle.load(open('popular.pkl','rb'))
+pt = pickle.load(open('pt.pkl','rb'))
+books = pickle.load(open('books.pkl','rb'))
+similarity_scores = pickle.load(open('similarity_scores.pkl','rb'))
 
-add_selectbox = st.sidebar.selectbox(
-    "Enter a book name",
-    (" ","Harry Potter", "The Davinci Code")
-)
+app = Flask(__name__)
 
-# Using "with" notation
-with st.sidebar:
-    add_radio = st.radio(
-        "Choose a Method for filtering: ",
-        ("Collaborative Filtering", "Content based Filtering","Popularity based Filtering")
-    )
-st.markdown('<p class="big-font">This is a collaborative filtering system.Know more about the system <a href="#">here</a>.</p>', unsafe_allow_html=True)
+@app.route('/')
+def index():
+    return render_template('index.html',
+                           book_name = list(popular_df['Title'].values),
+                           author=list(popular_df['Author'].values),
+                           image=list(popular_df['Image-URL-M'].values),
+                           votes=list(popular_df['num_ratings'].values),
+                           rating=list(popular_df['avg_rating'].values)
+                           )
 
+@app.route('/recommend')
+def recommend_ui():
+    return render_template('recommend.html')
 
-movies_list = pickle.load(open('books.pkl','rt'))
+@app.route('/recommend_books',methods=['post'])
+def recommend():
+    user_input = request.form.get('user_input')
+    index = np.where(pt.index == user_input)[0][0]
+    similar_items = sorted(list(enumerate(similarity_scores[index])), key=lambda x: x[1], reverse=True)[1:5]
+
+    data = []
+    for i in similar_items:
+        item = []
+        temp_df = books[books['Title'] == pt.index[i[0]]]
+        item.extend(list(temp_df.drop_duplicates('Title')['Title'].values))
+        item.extend(list(temp_df.drop_duplicates('Title')['Author'].values))
+        item.extend(list(temp_df.drop_duplicates('Title')['Image-URL-M'].values))
+
+        data.append(item)
+
+    print(data)
+
+    return render_template('recommend.html',data=data)
+
+if __name__ == '__main__':
+    app.run(debug=True)
